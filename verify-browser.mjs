@@ -4,7 +4,7 @@
  *
  * Drives real headless Google Chrome over the Chrome DevTools Protocol (CDP)
  * against a real http:// URL served from ./public, and produces hard evidence
- * about whether the "Nest Inventory & Food Cost" single-file app actually works.
+ * about whether the "eat@nest Inventory & Food Cost" single-file app actually works.
  *
  * Re-run:  node verify-browser.mjs
  *
@@ -376,8 +376,8 @@ async function main() {
   record('a1. index.html served over HTTP with status 200',
     httpStatus === 200 && locHref.startsWith('http://'),
     `static server status=${httpStatus}, location.href=${locHref}, readyState=${readyState}`);
-  record('a2. document.title === "Nest Inventory & Food Cost"',
-    docTitle === 'Nest Inventory & Food Cost',
+  record('a2. document.title === "eat@nest Inventory & Food Cost"',
+    docTitle === 'eat@nest Inventory & Food Cost',
     `document.title=${JSON.stringify(docTitle)}`);
 
   /* =============================== (b) =============================== */
@@ -869,7 +869,7 @@ async function main() {
   })`));
   const subReqs = requestLog.map((r) => `${r.url}:${r.status}`);
   record('i1. App works from a /<repo>/ GitHub Pages style subpath (no relative-path breakage)',
-    sub.title === 'Nest Inventory & Food Cost' && sub.appLen > 200 && sub.navButtons === 5 && exceptions.length === 0,
+    sub.title === 'eat@nest Inventory & Food Cost' && sub.appLen > 200 && sub.navButtons === 5 && exceptions.length === 0,
     `location.href=${sub.href}; title="${sub.title}"; app.innerHTML=${sub.appLen} chars; nav=${sub.navButtons}; typeof XLSX=${sub.xlsx}; requests=[${subReqs.join(', ')}]; exceptions=${exceptions.length}`);
   info(`i1 scripts resolved from: ${JSON.stringify(sub.resolvedScripts)}`);
 

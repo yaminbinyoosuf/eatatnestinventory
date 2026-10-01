@@ -1,10 +1,11 @@
-# Eat at Nest — Inventory & Food Cost
+# eat@nest — Inventory & Food Cost
 
 A single-file, offline, mobile-first inventory and food-cost tracker for the Nest Café outlets
 (**Areekode** and **Kondotty**).
 
 The whole app is `public/index.html` — no build step, no server, no framework. Open it directly,
-or deploy the `public/` folder as a static site.
+or deploy the `public/` folder as a static site. The logo is embedded in the file as a base64 data
+URI, so the app stays genuinely single-file with no image request.
 
 ## What it does
 
@@ -13,9 +14,9 @@ Five tabs, bottom navigation, mobile viewport first.
 | Tab | What's in it |
 |---|---|
 | **Today** | Data checks, "what to look at", and the top cost issues ranked for the day. |
-| **Sales** | Upload POS sales from **Excel (.xlsx) or CSV**, review the imported rows for the day, then confirm the import. |
+| **Sales** | Upload POS sales from **Excel (.xlsx) or CSV**, review the imported rows for the day, then confirm the import. POS item names are remembered as aliases, so the same name matches the same menu item on later imports. |
 | **Stock** | Daily closing stock per outlet (Areekode / Kondotty) and wastage entries with quantity and responsible person. |
-| **Items** | Raw materials (price per unit, minimum stock level) and menu items with recipes — ingredient quantities in `g / ml / pc`, costing, and **cost now vs 30 days earlier**. Recipes are versioned: *Save as new version* keeps the price history for the comparison. |
+| **Items** | Raw materials (price per unit, minimum stock level) and menu items with recipes — ingredient quantities in `g / ml / pc`, costing, and **cost now vs 30 days earlier**. Recipes are versioned: *Save as new version* keeps the price history for the comparison. A separate **Sauces & prep items** section lists the raw materials flagged as prep, with their own recipe and cost. |
 | **Settings** | Outlet setup, and demo-data controls (*Clear demo data*, *Reset to demo*). |
 
 Money is shown in ₹ (Indian formatting). Units are `kg → g`, `l → ml`, and `pc`.
