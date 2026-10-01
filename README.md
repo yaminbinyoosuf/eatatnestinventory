@@ -30,9 +30,9 @@ That also means **an audit lives in the browser that created it** — opening th
 ships with seeded demo data so it is explorable before you put real numbers in; use **Settings →
 Clear demo data** to start clean.
 
-> Because the store is browser-local, clearing site data or switching devices/browsers loses the
-> entries. Keep the app on one URL per outlet device, and export rather than relying on a browser
-> reset.
+> Because the store is browser-local and the app has **no export or backup**, clearing site data,
+> switching device, or switching browser loses every entry. Keep each outlet on one URL/device and
+> treat the browser store as the only copy of the numbers.
 
 ## Deploy
 
@@ -44,8 +44,9 @@ The repo is static-only, so both hosts below work with **no build command**.
 https://yaminbinyoosuf.github.io/eatatnestinventory/
 ```
 
-Served straight from the `main` branch root, with `.nojekyll` in `public/` so the folder is
-served verbatim.
+Published by the Actions workflow in `.github/workflows/pages.yml`, which uploads `public/`
+verbatim as the Pages artifact on every push to `main` (branch-based Pages can only serve the repo
+root or `/docs`, which is why the app is not published from the `public/` folder directly).
 
 **Cloudflare Workers** (optional alternative) — the repo also ships a `wrangler.jsonc` pointing at
 `./public`, so no build configuration is needed on the Cloudflare side:
@@ -66,7 +67,8 @@ npx wrangler deploy --dry-run
 | File | Purpose |
 |---|---|
 | `public/index.html` | the app — the only file that gets deployed |
-| `public/.nojekyll` | keeps GitHub Pages from running Jekyll over the folder |
+| `public/.nojekyll` | keeps Jekyll away from the folder if it is ever served from a branch root |
+| `.github/workflows/pages.yml` | uploads `public/` to GitHub Pages on every push to `main` |
 | `wrangler.jsonc` | optional Cloudflare Workers static-assets config (`assets.directory = ./public`) |
 | `verify-browser.mjs` | real-browser verification over CDP — console/exception capture, every tab, a real mutation, reload persistence, screenshots |
 | `verified-*.png` | screenshots written by the verifier (gitignored) |
@@ -82,8 +84,17 @@ node verify-browser.mjs
 
 It writes `verified-*.png` screenshots next to itself and cleans up its temporary Chrome profile.
 
-## Note on the Excel export / POS import
+## Note on the POS import (SheetJS)
 
-SheetJS (`xlsx.full.min.js`) is loaded from cdnjs at runtime. Read-only browsing and everything
-already stored in `localStorage` work offline, but **Excel/CSV import and Excel export need a
-network connection** the first time so that library can load.
+SheetJS (`xlsx.full.min.js`) is loaded from cdnjs at runtime and is used **only to read** the POS
+file you upload — **the app has no export**. The import needs a network connection the first time
+so that library can load; if it is unavailable the app still opens and the import fails visibly
+with `Import problem: ReferenceError: XLSX is not defined`. Everything already stored in
+`localStorage` keeps working offline.
+
+## Robustness of the stored state
+
+This matters more than it sounds on GitHub Pages: **every `*.github.io` project page shares one
+origin**, so another app that writes the same `nest2` key would otherwise collide with this one.
+On load the parsed state is therefore validated — if `sales`, `rm`, `menu`, `inv` and `waste` are
+not all arrays, the app falls back to the seeded demo data instead of failing to render.

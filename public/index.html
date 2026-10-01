@@ -43,7 +43,7 @@ function demo(){const rm=[['Fries','kg',90,12],['Chicken','kg',260,6],['Cheese',
  for(let i=0;i<7;i++){const d=addD('2026-09-25',i);menu.forEach((m,j)=>{const q=i==6?[208,85,62,70,48][j]:Math.round(base[j]*(.9+.2*(((i+1)*(j+3))%5)/4));S.sales.push({d,o,mid:m.id,qty:q,amt:q*m.price,demo:1})})}
  const st={};for(let i=0;i<7;i++){const d=addD('2026-09-25',i),c=calc(d,[o]);c.rows.forEach((t,k)=>{const id=t.x.id,v=id=='r0'?(i==6?1.0737:1.06):id=='r1'?(i%2?1.05:1.02):1+((i*3+k)%4)/200;const act=+(t.exp*v).toFixed(2),op=st[id]!=null?st[id]:Math.ceil(t.exp*1.5),pu=Math.ceil(act*.9),cl=+(op+pu-act).toFixed(2);st[id]=cl;S.inv.push({d,o,rm:id,open:op,pur:pu,inn:0,out:0,close:cl,demo:1})})}
  S.waste.push({d:'2026-10-01',o,rm:'r0',qty:1.2,why:'Spoilage',who:'Kitchen',demo:1},{d:'2026-10-01',o,rm:'r1',qty:.4,why:'Cooking error',who:'Kitchen',demo:1},{d:'2026-09-30',o,rm:'r2',qty:.3,why:'Expired',who:'',demo:1});return S}
-if(!S)S=demo();
+if(!S||!['sales','rm','menu','inv','waste'].every(k=>Array.isArray(S[k])))S=demo();
 let V={tab:'dash',date:(S.sales.map(s=>s.d).sort().pop()||iso(new Date())),out:'Areekode'},P=null,ED=null;
 const outs=()=>V.out=='All'?OUT:[V.out],g=id=>document.getElementById(id),val=id=>g(id)?g(id).value:'';
 const bar=()=>`<div class="row"><input type="date" value="${V.date}" onchange="V.date=this.value;P=null;draw()"><select onchange="V.out=this.value;draw()">${['All',...OUT].map(o=>`<option ${o==V.out?'selected':''}>${o}</option>`).join('')}</select></div>`;
