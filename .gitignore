@@ -1,0 +1,7 @@
+# local tooling / generated output
+.chrome-prof-*/
+.wrangler/
+.dryrun/
+node_modules/
+verified-*.png
+shot-*.png

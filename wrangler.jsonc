@@ -1,0 +1,10 @@
+{
+  // Static, no-build deploy. `npx wrangler deploy` uploads ./public as an
+  // assets-only Worker - no `main` entry point and no build step required.
+  // Optional alternative to the GitHub Pages link in README.md.
+  "name": "eatatnestinventory",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public"
+  }
+}
