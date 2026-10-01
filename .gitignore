@@ -5,3 +5,5 @@
 node_modules/
 verified-*.png
 shot-*.png
+live-*.png
+live-*.html
