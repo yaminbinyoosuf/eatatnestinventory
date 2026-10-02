@@ -15,8 +15,8 @@ Five tabs, bottom navigation, mobile viewport first.
 |---|---|
 | **Today** | Data checks, "what to look at", and the top cost issues ranked for the day. |
 | **Sales** | Upload POS sales from **Excel (.xlsx) or CSV**, review the imported rows for the day, then confirm the import. POS item names are remembered as aliases, so the same name matches the same menu item on later imports. |
-| **Stock** | Daily closing stock per outlet (Areekode / Kondotty) and wastage entries with quantity and responsible person. |
-| **Items** | Raw materials (price per unit, minimum stock level) and menu items with recipes — ingredient quantities in `g / ml / pc`, costing, and **cost now vs 30 days earlier**. Recipes are versioned: *Save as new version* keeps the price history for the comparison. A separate **Sauces & prep items** section lists the raw materials flagged as prep, with their own recipe and cost. |
+| **Stock** | Daily closing stock per outlet (Areekode / Kondotty) and wastage entries with quantity and responsible person. A day can be closed (🔒) once it is finalised. |
+| **Items** | Raw materials (price per unit, minimum stock level) and menu items with recipes — ingredient quantities in `g / ml / pc`, costing, and **cost now vs 30 days earlier**. Existing materials and menu items can be **edited or deleted** after the fact. Recipes are versioned: *Save as new version* keeps the price history for the comparison. A separate **Sauces & prep items** section lists the raw materials flagged as prep, with their own recipe and cost. |
 | **Settings** | Outlet setup, and demo-data controls (*Clear demo data*, *Reset to demo*). |
 
 Money is shown in ₹ (Indian formatting). Units are `kg → g`, `l → ml`, and `pc`.
