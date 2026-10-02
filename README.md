@@ -99,3 +99,25 @@ This matters more than it sounds on GitHub Pages: **every `*.github.io` project 
 origin**, so another app that writes the same `nest2` key would otherwise collide with this one.
 On load the parsed state is therefore validated — if `sales`, `rm`, `menu`, `inv` and `waste` are
 not all arrays, the app falls back to the seeded demo data instead of failing to render.
+
+### Dangling ingredient references (fixed)
+
+**Settings → Clear demo data** used to delete the demo raw materials while keeping any non-demo
+menu item whose recipe referenced them. That left a dangling ingredient id, `price()` dereferenced
+the missing material, and the resulting `TypeError` aborted `draw()` — so `#nav` never rendered.
+After a reload the app was a **blank page with no navigation**, and because Settings is the only
+in-app reset, the user's records were unreachable with no way back. The same class of failure could
+blank the default Today tab outright.
+
+Two changes close it:
+
+- **Clear demo data now prunes references** to the records it removes — ingredient rows in surviving
+  menu and prep recipes, plus stock and wastage rows pointing at deleted materials — so it cannot
+  leave a dangling id behind.
+- **A missing material is no longer fatal.** `rmOf()` returns a placeholder (`"(missing)"`, unit
+  `pc`, no prices, no recipe) instead of `undefined`, so any dangling reference renders as a missing
+  ingredient rather than throwing. This is defence in depth: it also covers hand-edited storage and
+  any future import path.
+
+Both are covered by `verify-edit.mjs` (32 assertions), which reproduces the original lockout —
+including the blank-screen-after-reload case — and asserts it no longer occurs.
