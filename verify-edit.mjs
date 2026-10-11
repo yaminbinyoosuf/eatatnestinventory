@@ -342,9 +342,9 @@ async function main() {
     A.sRm === 8 && A.sMenu === 5,
     `S.rm.length=${A.sRm} (${A.nonPrepCount} non-prep rows + ${A.prepCount} prep), S.menu.length=${A.sMenu}; V.date=${A.Vdate}; localStorage['nest2']=${A.lsBytes} bytes`);
 
-  record('a2. RAW MATERIALS table has the new empty 6th <th> column',
-    A.thCount === 6 && A.emptyThCount === 1 && A.thTexts[5] === '',
-    `#app tables=${A.tableCount}; raw-material th=[${A.thTexts.map((t) => JSON.stringify(t)).join(', ')}]; thCount=${A.thCount}, empty <th> count=${A.emptyThCount}, last th=${JSON.stringify(A.thTexts[5])}`);
+  record('a2. RAW MATERIALS header is Material/Now/Before/Change/Set price (Edit sits in the Material cell)',
+    A.thCount === 5 && JSON.stringify(A.thTexts) === JSON.stringify(['Material', 'Now', 'Before', 'Change', 'Set price']),
+    `#app tables=${A.tableCount}; raw-material th=[${A.thTexts.map((t) => JSON.stringify(t)).join(', ')}]; thCount=${A.thCount}; the per-row Edit button is covered by a3`);
 
   record('a3. RAW MATERIALS table renders one Edit button per material',
     A.matEditBtnCount === A.nonPrepCount && A.matEditBtnCount === 8 && A.matRowCount === 8,
@@ -628,10 +628,15 @@ async function main() {
     rmLen:S.rm.length,EM:EM,
     alerts:window.__alerts.slice(${confirmBase.alerts}),confirms:window.__confirms.slice(${confirmBase.confirms}),
     orphans:S.menu.flatMap(m=>m.rec.flatMap(v=>v.items.filter(i=>!rmOf(i.rm)).map(i=>({menu:m.name,rm:i.rm})))),
+    danglingStock:S.inv.filter(e=>!rmOf(e.rm)).length,
+    danglingWaste:S.waste.filter(w=>!rmOf(w.rm)).length,
+    danglingBuy:(S.buy||[]).filter(b=>!rmOf(b.rm)).length,
     allRecipeRefsResolvable:S.menu.every(m=>m.rec.every(v=>v.items.every(i=>!!rmOf(i.rm))))};})()`);
 
-  record('f1. Deleting a recipe-used material does not orphan a menu recipe',
-    afterUsedDel.orphans.length === 0 && afterUsedDel.allRecipeRefsResolvable === true && afterUsedDel.stillInS === true,
+  record('f1. Deleting a used material cascades everywhere and orphans nothing',
+    afterUsedDel.stillInS === false && afterUsedDel.stillInLs === false &&
+    afterUsedDel.orphans.length === 0 && afterUsedDel.allRecipeRefsResolvable === true &&
+    afterUsedDel.danglingStock === 0 && afterUsedDel.danglingWaste === 0 && afterUsedDel.danglingBuy === 0,
     `material ${usedId} (${JSON.stringify(usedProbe.name)}) is used: menuRecipe=${usedProbe.menuRecipe}, prepRecipe=${usedProbe.prepRecipe}, stock=${usedProbe.stock}, waste=${usedProbe.waste} -> usedM(${usedId})=${usedProbe.usedM}. Clicked Edit found=${openUsed.found}, then Delete found=${delUsedClick.found}. RESULT: record still in S.rm=${afterUsedDel.stillInS}, still in localStorage=${afterUsedDel.stillInLs}; S.rm.length unchanged=${afterUsedDel.rmLen}; alert() text=${JSON.stringify(afterUsedDel.alerts)}; confirm() text=${JSON.stringify(afterUsedDel.confirms)}; dangling recipe refs=${JSON.stringify(afterUsedDel.orphans)}`);
 
   const added2 = await cdp.eval(`(()=>{document.getElementById('an').value='ZZ Verify GuardStock';document.getElementById('au').value='kg';document.getElementById('ap').value='9';return true;})()`);
@@ -651,11 +656,13 @@ async function main() {
   const guardDelClick = await clickExact('delM()');
   await sleep(250);
   const guard2 = await q(`(()=>{return {stillInS:!!S.rm.find(r=>r.id===${JSON.stringify(gid)}),rmLen:S.rm.length,
+    wasteRows:S.waste.filter(w=>w.rm===${JSON.stringify(gid)}).length,
+    danglingWaste:S.waste.filter(w=>!rmOf(w.rm)).length,
     alerts:window.__alerts.slice(${guardBase.alerts}),confirms:window.__confirms.slice(${guardBase.confirms})};})()`);
 
-  record('f2. A material used ONLY by a wastage/stock record is also protected from deletion (usedM guards more than recipes)',
-    guard1.usedM === true && guard1.wasteEntry === true && guard2.stillInS === true,
-    `material ${gid} ("ZZ Verify GuardStock"): addRM clicked=${add2.found}; saveWaste onclick="${wasteClick.onclick}" found=${wasteClick.found} (typed ${JSON.stringify(wasteAdd)}); then usedM=${guard1.usedM} with waste entry=${guard1.wasteEntry}, stock entry=${guard1.stock}, menu-recipe usage=${guard1.menuRecipe}; Delete found=${guardDelClick.found} -> still in S.rm=${guard2.stillInS} (S.rm.length=${guard2.rmLen}); alert()=${JSON.stringify(guard2.alerts)}; confirm()=${JSON.stringify(guard2.confirms)} (no confirm => nothing was deleted)`);
+  record('f2. Deleting a material used only by a wastage record also clears that record (nothing dangling)',
+    guard1.usedM === true && guard1.wasteEntry === true && guard2.stillInS === false && guard2.wasteRows === 0 && guard2.danglingWaste === 0,
+    `material ${gid} ("ZZ Verify GuardStock"): addRM clicked=${add2.found}; saveWaste onclick="${wasteClick.onclick}" found=${wasteClick.found} (typed ${JSON.stringify(wasteAdd)}); then usedM=${guard1.usedM} with waste entry=${guard1.wasteEntry}, stock entry=${guard1.stock}, menu-recipe usage=${guard1.menuRecipe}; Delete found=${guardDelClick.found} -> still in S.rm=${guard2.stillInS} (S.rm.length=${guard2.rmLen}); alert()=${JSON.stringify(guard2.alerts)}; confirm()=${JSON.stringify(guard2.confirms)} ; wastage rows left for it=${guard2.wasteRows}`);
 
   await cdp.eval(`V.tab='items';draw();`);
   const orphanProbe = await q(`(()=>({orphans:S.menu.flatMap(m=>m.rec.flatMap(v=>v.items.filter(i=>!rmOf(i.rm)).map(i=>({menu:m.name,rm:i.rm})))),total:S.menu.reduce((n,m)=>n+m.rec.reduce((k,v)=>k+v.items.length,0),0)}))()`);
@@ -753,14 +760,14 @@ async function main() {
   await evalSafe(`(()=>{V.tab='dash';draw();return true;})()`);
   const navBefore = await q(`(()=>({tab:V.tab,appLen:document.getElementById('app').innerHTML.length,text:document.getElementById('app').textContent.trim().slice(0,400)}))()`);
   exceptions.length = 0;
-  const navClick = await evalSafe(`(()=>{const b=document.getElementById('nav').querySelectorAll('button')[3];const label=b.textContent;b.click();return label;})()`);
+  const navClick = await evalSafe(`(()=>{const b=[...document.getElementById('nav').querySelectorAll('button')].find(x=>x.textContent.includes('Items'));if(!b)return 'Items button NOT FOUND';const label=b.textContent;b.click();return label;})()`);
   await sleep(250);
   const navAfter = await q(`(()=>({tab:V.tab,appLen:document.getElementById('app').innerHTML.length,navActive:[...document.querySelectorAll('#nav button.on')].map(b=>b.textContent),text:document.getElementById('app').textContent.trim().slice(0,400)}))()`);
   const realUncaught = exceptions.slice();
 
   record('X3. After the orphan exists the Items tab no longer renders and the real Items nav click raises an uncaught TypeError [APP TAB FATALLY BROKEN if FAIL]',
     directItemsError.ok === true && navAfter.text.indexOf('Raw materials') >= 0 && realUncaught.length === 0,
-    `direct draw() per tab -> [${tabScope.join(', ')}]; direct V.tab='items';draw() -> ok=${directItemsError.ok}${directItemsError.ok ? ` appLen=${directItemsError.value}` : ` error=${directItemsError.error}`}; before nav click: active tab=${navBefore.tab}, #app=${navBefore.appLen} chars ("${navBefore.text}"); clicked nav button[3] "${navClick.value}" -> V.tab now=${navAfter.tab}, #app still ${navAfter.appLen} chars ("${navAfter.text}"), nav .on=[${navAfter.navActive.join(',')}]; UNCAUGHT exceptions from the real click=${realUncaught.length}${realUncaught.length ? ' :: ' + fmtEx(realUncaught) : ' (the inline onclick swallowed it silently)'}`);
+    `direct draw() per tab -> [${tabScope.join(', ')}]; direct V.tab='items';draw() -> ok=${directItemsError.ok}${directItemsError.ok ? ` appLen=${directItemsError.value}` : ` error=${directItemsError.error}`}; before nav click: active tab=${navBefore.tab}, #app=${navBefore.appLen} chars ("${navBefore.text}"); clicked the "${navClick.value}" nav button" -> V.tab now=${navAfter.tab}, #app still ${navAfter.appLen} chars ("${navAfter.text}"), nav .on=[${navAfter.navActive.join(',')}]; UNCAUGHT exceptions from the real click=${realUncaught.length}${realUncaught.length ? ' :: ' + fmtEx(realUncaught) : ' (the inline onclick swallowed it silently)'}`);
 
   // and it survives a reload, because the corruption is in localStorage
   const exBeforeX4 = exceptions.length;
@@ -782,7 +789,7 @@ async function main() {
   await reloadPage();
   const restored = await q(`(()=>({appLen:document.getElementById('app').innerHTML.length,rm:S.rm.length,menu:S.menu.length,navButtons:document.getElementById('nav').querySelectorAll('button').length}))()`);
   record('X5. Clearing localStorage and reloading restores the demo app (recovery requires manual localStorage clearing)',
-    restored.appLen > 200 && restored.rm === 8 && restored.menu === 5 && restored.navButtons === 5,
+    restored.appLen > 200 && restored.rm === 8 && restored.menu === 5 && restored.navButtons === 6,
     `after localStorage.clear() + reload: #app=${restored.appLen} chars, S.rm.length=${restored.rm}, S.menu.length=${restored.menu}, nav buttons=${restored.navButtons}, uncaught exceptions=${exceptions.length}`);
 
   /* ================================================================== *
@@ -853,7 +860,7 @@ async function main() {
   const yBootEx = exceptions.slice(exBeforeY4);
 
   record('Y4. The app still boots into a usable UI after the reload [BLANK-SCREEN DATA LOCKOUT if FAIL]',
-    yBoot.appLen > 200 && yBoot.navButtons === 5,
+    yBoot.appLen > 200 && yBoot.navButtons === 6,
     `reload load event=${yReload}; on boot: #app=${yBoot.appLen} chars, #nav=${yBoot.navLen} chars, nav buttons=${yBoot.navButtons}, title=${JSON.stringify(yBoot.title)}, S.rm.length=${yBoot.Srm}, V.date=${yBoot.Vdate}; UNCAUGHT exception during boot draw()=${yBootEx.length}${yBootEx.length ? ' :: ' + fmtEx(yBootEx) : ''}`);
 
   await cdp.eval(`localStorage.clear()`);
@@ -861,7 +868,7 @@ async function main() {
   await reloadPage();
   const yRestored = await q(`(()=>({appLen:document.getElementById('app').innerHTML.length,rm:S.rm.length,menu:S.menu.length,navButtons:document.getElementById('nav').querySelectorAll('button').length}))()`);
   record('Y5. Clearing localStorage by hand restores the app (no in-app recovery path exists once #nav is gone)',
-    yRestored.appLen > 200 && yRestored.rm === 8 && yRestored.menu === 5 && yRestored.navButtons === 5,
+    yRestored.appLen > 200 && yRestored.rm === 8 && yRestored.menu === 5 && yRestored.navButtons === 6,
     `after localStorage.clear() + reload: #app=${yRestored.appLen} chars, S.rm.length=${yRestored.rm}, S.menu.length=${yRestored.menu}, nav buttons=${yRestored.navButtons}, uncaught exceptions=${exceptions.length}`);
 
   /* ------------------------- transcripts ------------------------- */

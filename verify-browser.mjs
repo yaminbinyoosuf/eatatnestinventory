@@ -414,13 +414,13 @@ async function main() {
     tabIds: typeof TABS !== 'undefined' ? TABS.map(t => t[0]) : null,
   })`);
   const G = JSON.parse(globals);
-  record('c1. TABS.length === 5 with ids dash/sales/stock/items/set',
-    G.tabsLen === 5 && JSON.stringify(G.tabIds) === JSON.stringify(['dash', 'sales', 'stock', 'items', 'set']),
+  record('c1. TABS.length === 6 with ids dash/sales/stock/buy/items/set',
+    G.tabsLen === 6 && JSON.stringify(G.tabIds) === JSON.stringify(['dash', 'sales', 'stock', 'buy', 'items', 'set']),
     `TABS.length=${G.tabsLen}, ids=${JSON.stringify(G.tabIds)}`);
 
   const tabReport = [];
   let tabPass = true;
-  for (const id of ['dash', 'sales', 'stock', 'items', 'set']) {
+  for (const id of ['dash', 'sales', 'stock', 'buy', 'items', 'set']) {
     const r = await cdp.eval(`(() => {
       V.tab = ${JSON.stringify(id)};
       draw();
@@ -435,17 +435,17 @@ async function main() {
       });
     })()`);
     const t = JSON.parse(r);
-    const ok = t.appLen > 200 && t.navButtons === 5;
+    const ok = t.appLen > 200 && t.navButtons === 6;
     if (!ok) tabPass = false;
     tabReport.push(`${t.id}: app.innerHTML=${t.appLen}, navButtons=${t.navButtons}, "${t.firstText}"`);
   }
-  record('c2. Every tab (V.tab + draw()) renders >200 chars into #app and #nav has 5 buttons',
+  record('c2. Every tab (V.tab + draw()) renders >200 chars into #app and #nav has 6 buttons',
     tabPass, tabReport.join(' || '));
 
   // also exercise the REAL nav button click handlers (onclick="V.tab=...;draw()")
   const clickReport = [];
   let clickPass = true;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 6; i++) {
     const r = await cdp.eval(`(() => {
       const nav = document.getElementById('nav');
       const btns = nav.querySelectorAll('button');
@@ -459,7 +459,7 @@ async function main() {
       });
     })()`);
     const t = JSON.parse(r);
-    const ok = t.tab === ['dash', 'sales', 'stock', 'items', 'set'][i] && t.appLen > 200 && t.activeCount === 1;
+    const ok = t.tab === ['dash', 'sales', 'stock', 'buy', 'items', 'set'][i] && t.appLen > 200 && t.activeCount === 1;
     if (!ok) clickPass = false;
     clickReport.push(`btn[${i}] "${t.label}" -> V.tab=${t.tab}, appLen=${t.appLen}, active=${t.activeCount}`);
   }
@@ -771,7 +771,7 @@ async function main() {
     const cdnExceptions = [...exceptions];
     const xlsxGone = noCdn.xlsx === 'undefined';
     record('h1. With the xlsx CDN blocked: no uncaught exception, app UI still renders (CDN fault reported as WARNING)',
-      xlsxGone && cdnExceptions.length === 0 && noCdn.appLen > 200 && noCdn.navButtons === 5,
+      xlsxGone && cdnExceptions.length === 0 && noCdn.appLen > 200 && noCdn.navButtons === 6,
       xlsxGone
         ? `typeof XLSX=${noCdn.xlsx}; app.innerHTML=${noCdn.appLen} chars; nav buttons=${noCdn.navButtons}; uncaught exceptions=${cdnExceptions.length}${cdnExceptions.length ? ' :: ' + cdnExceptions.map((e) => `${e.text} @ ${e.url}:${(e.line ?? -1) + 1}`).join(' | ') : ''}`
         : `COULD NOT SIMULATE CDN OUTAGE (typeof XLSX=${noCdn.xlsx}) - result not meaningful`);
@@ -869,7 +869,7 @@ async function main() {
   })`));
   const subReqs = requestLog.map((r) => `${r.url}:${r.status}`);
   record('i1. App works from a /<repo>/ GitHub Pages style subpath (no relative-path breakage)',
-    sub.title === 'eat@nest Inventory & Food Cost' && sub.appLen > 200 && sub.navButtons === 5 && exceptions.length === 0,
+    sub.title === 'eat@nest Inventory & Food Cost' && sub.appLen > 200 && sub.navButtons === 6 && exceptions.length === 0,
     `location.href=${sub.href}; title="${sub.title}"; app.innerHTML=${sub.appLen} chars; nav=${sub.navButtons}; typeof XLSX=${sub.xlsx}; requests=[${subReqs.join(', ')}]; exceptions=${exceptions.length}`);
   info(`i1 scripts resolved from: ${JSON.stringify(sub.resolvedScripts)}`);
 

@@ -9,14 +9,15 @@ URI, so the app stays genuinely single-file with no image request.
 
 ## What it does
 
-Five tabs, bottom navigation, mobile viewport first.
+Six tabs, bottom navigation, mobile viewport first.
 
 | Tab | What's in it |
 |---|---|
 | **Today** | Data checks, "what to look at", and the top cost issues ranked for the day. |
 | **Sales** | Upload POS sales from **Excel (.xlsx) or CSV**, review the imported rows for the day, then confirm the import. POS item names are remembered as aliases, so the same name matches the same menu item on later imports. |
 | **Stock** | Daily closing stock per outlet (Areekode / Kondotty) and wastage entries with quantity and responsible person. A day can be closed (🔒) once it is finalised. |
-| **Items** | Raw materials (price per unit, minimum stock level) and menu items with recipes — ingredient quantities in `g / ml / pc`, costing, and **cost now vs 30 days earlier**. Existing **raw materials** can be renamed, re-priced (or have their unit changed) or **deleted**; a material still used by a recipe, a stock entry or a wastage record is protected — the app refuses the delete and asks you to edit it instead, so no recipe is ever left pointing at a material that is gone. Recipes are versioned: *Save as new version* keeps the price history for the comparison. A separate **Sauces & prep items** section lists the raw materials flagged as prep, with their own recipe and cost. |
+| **Buy** | Purchases from a bill, per outlet and date, with a running total. Lines can be typed by hand, or read from a photo/screenshot of the bill when the app is opened from the Claude link. Saving a purchase adds to that material's price history, which feeds the *Now vs Before* column and the price-change analysis on **Today**. |
+| **Items** | Raw materials (price per unit, minimum stock level) and menu items with recipes — ingredient quantities in `g / ml / pc`, costing, and **cost now vs 30 days earlier**. Existing **raw materials** can be renamed, re-priced (or have their unit changed) or **deleted**. Deleting one that is still in use cascades: the app warns you first, then removes it from every menu and prep recipe, stock row, wastage record and purchase line at the same moment, so nothing is ever left pointing at a material that is gone. (Earlier builds refused the delete instead; both policies keep the same invariant — `verify-edit.mjs` asserts the cascade leaves nothing dangling.) Recipes are versioned: *Save as new version* keeps the price history for the comparison. A separate **Sauces & prep items** section lists the raw materials flagged as prep, with their own recipe and cost. |
 | **Settings** | Outlet setup, and demo-data controls (*Clear demo data*, *Reset to demo*). |
 
 Money is shown in ₹ (Indian formatting). Units are `kg → g`, `l → ml`, and `pc`.
@@ -121,3 +122,14 @@ Two changes close it:
 
 Both are covered by `verify-edit.mjs` (32 assertions), which reproduces the original lockout —
 including the blank-screen-after-reload case — and asserts it no longer occurs.
+
+The same two guards were dropped in a later build of the app and are restored here:
+
+- `rmOf()` again returns the `{name:'(missing)'}` placeholder for an unresolved id, so a dangling
+  ingredient renders instead of throwing.
+- **Settings → Clear demo data** again prunes references to the records it deletes — ingredient rows
+  in surviving menu and prep recipes, plus stock, wastage and purchase rows pointing at removed
+  materials. Without the prune the dangling ids persisted in `localStorage` and survived reload.
+
+`verify-edit.mjs` also follows two deliberate changes in the newer build: the sixth (Buy) tab, and
+the cascade delete policy described above.
