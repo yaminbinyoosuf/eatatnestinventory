@@ -795,6 +795,21 @@ async function main() {
     } finally {
       try { fs.rmSync(csvPath2, { force: true }); } catch { /* ignore */ }
     }
+    // exports must degrade with a message when the CDN libraries are missing
+    await cdp.eval(`localStorage.clear()`);
+    await reloadPage();
+    await cdp.eval(`(()=>{window.__dl=[];HTMLAnchorElement.prototype.click=function(){window.__dl.push(this.download);};V.tab='dash';draw();return 1;})()`);
+    const alertBase3 = JSON.parse(await cdp.eval(`JSON.stringify((window.__alerts||[]).length)`));
+    const exBase3 = exceptions.length;
+    await cdp.eval(`(doExport('xlsx'),1)`);
+    await sleep(400);
+    await cdp.eval(`(doExport('pdf'),1)`);
+    await sleep(400);
+    const expo = JSON.parse(await cdp.eval(`JSON.stringify({ alerts: (window.__alerts||[]).slice(${alertBase3}), downloads: (window.__dl||[]).length })`));
+    record('h4. With the CDN blocked, both exports report the missing library instead of writing a broken file',
+      expo.alerts.filter((a) => /did not load/.test(a)).length === 2 && expo.downloads === 0 && exceptions.length === exBase3,
+      `alerts=${JSON.stringify(expo.alerts)}; downloads attempted=${expo.downloads}; uncaught exceptions=${exceptions.length - exBase3}`);
+
     await cdp.send('Network.setBlockedURLs', { urls: [] }).catch(() => {});
   } else {
     warn('h1/h2 skipped', 'could not block the CDN URL from this harness');

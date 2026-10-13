@@ -871,6 +871,55 @@ async function main() {
     yRestored.appLen > 200 && yRestored.rm === 8 && yRestored.menu === 5 && yRestored.navButtons === 6,
     `after localStorage.clear() + reload: #app=${yRestored.appLen} chars, S.rm.length=${yRestored.rm}, S.menu.length=${yRestored.menu}, nav buttons=${yRestored.navButtons}, uncaught exceptions=${exceptions.length}`);
 
+  /* =============================== (Z) ranges + export =============================== */
+  await cdp.eval(`(V.tab='dash',V.per='day',draw(),1)`);
+  const zChips = await q(`(()=>({
+    labels:[...document.querySelectorAll('#app button')].filter(b=>/V\.per=/.test(b.getAttribute('onclick')||'')).map(b=>b.textContent.trim()),
+    per:V.per}))()`);
+  record('Z1. Today offers Day / 7 days / 30 days / Custom range chips',
+    JSON.stringify(zChips.labels) === JSON.stringify(['Day', '7 days', '30 days', 'Custom']) && zChips.per === 'day',
+    `chips=[${zChips.labels.join(', ')}]; V.per=${zChips.per}`);
+
+  const zDay = await q(`(()=>({len:document.getElementById('app').innerHTML.length,dd:(()=>{const R=repData();return R?R.A.dd:null})()}))()`);
+  await cdp.eval(`(V.per='7',draw(),1)`);
+  const zWeek = await q(`(()=>{const[f,t]=rng();return {per:V.per,f:f,t:t,span:Math.round((new Date(t)-new Date(f))/86400000)+1,len:document.getElementById('app').innerHTML.length,dd:(()=>{const R=repData();return R?R.A.dd:null})()};})()`);
+  record('Z2. Switching to 7 days re-renders the report for that range',
+    zWeek.per === '7' && zWeek.span === 7 && zWeek.dd > 0 && zWeek.len > 200,
+    `V.per=${zWeek.per}; range ${zWeek.f}..${zWeek.t} = ${zWeek.span} days; days with data=${zWeek.dd}; #app=${zWeek.len} chars (day view: ${zDay.len} chars, ${zDay.dd} day(s) with data)`);
+
+  const zRep = await q(`(()=>{const R=repData();return R?{f:R.f,t:R.t,dd:R.A.dd,sales:Math.round(R.A.sales),sections:R.sections.map(s=>s.name)}:null})()`);
+  record('Z3. repData() builds the report sections for the selected range',
+    !!zRep && zRep.dd > 0 && zRep.sales > 0 && zRep.sections.length >= 2,
+    zRep ? `range ${zRep.f}..${zRep.t}, days with data=${zRep.dd}, sales=${zRep.sales}, sections=[${zRep.sections.join(', ')}]` : 'repData() returned null');
+
+  // real exports: intercept the anchor click that dl() performs, then read the blob back
+  await cdp.eval(`(()=>{window.__dl=[];window.__origClick=HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click=function(){window.__dl.push({name:this.download,href:this.href});};return 1;})()`);
+  const grab = async (kind, timeoutMs) => {
+    const n0 = await q(`((window.__dl||[]).length)`);
+    await cdp.eval(`(doExport(${JSON.stringify(kind)}),1)`);
+    for (let waited = 0; waited < timeoutMs; waited += 150) {
+      await sleep(150);
+      if ((await q(`((window.__dl||[]).length)`)) > n0) break;
+    }
+    const raw = await cdp.eval(`(async()=>{const d=(window.__dl||[]).at(-1);if(!d)return JSON.stringify({none:true});
+      const r=await fetch(d.href);const b=await r.blob();const head=new Uint8Array(await b.slice(0,4).arrayBuffer());
+      return JSON.stringify({name:d.name,size:b.size,head:[...head].map(c=>String.fromCharCode(c)).join('')});})()`, { awaitPromise: true });
+    return JSON.parse(raw);
+  };
+
+  const xls = await grab('xlsx', 4000);
+  record('Z4. Excel export produces a real .xlsx workbook',
+    !xls.none && /\.xlsx$/.test(xls.name || '') && (xls.head || '').slice(0, 2) === 'PK' && xls.size > 2000,
+    JSON.stringify(xls));
+
+  const pdf = await grab('pdf', 6000);
+  record('Z5. PDF export produces a real PDF file',
+    !pdf.none && /\.pdf$/.test(pdf.name || '') && pdf.head === '%PDF' && pdf.size > 2000,
+    JSON.stringify(pdf));
+
+  await cdp.eval(`(()=>{if(window.__origClick)HTMLAnchorElement.prototype.click=window.__origClick;V.per='day';draw();return 1;})()`);
+
   /* ------------------------- transcripts ------------------------- */
   console.log('\n================ CONSOLE & PAGE-ERROR TRANSCRIPT (main edit/delete flow) ================');
   const interestingConsole = mainTranscript.consoleMsgs.filter((m) => m.type !== 'debug');

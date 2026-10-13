@@ -72,34 +72,50 @@ npx wrangler deploy --dry-run
 | `public/.nojekyll` | keeps Jekyll away from the folder if it is ever served from a branch root |
 | `.github/workflows/pages.yml` | uploads `public/` to GitHub Pages on every push to `main` |
 | `wrangler.jsonc` | optional Cloudflare Workers static-assets config (`assets.directory = ./public`) |
-| `verify-browser.mjs` | real-browser verification over CDP — console/exception capture, every tab, a real mutation, reload persistence, screenshots |
-| `verified-*.png` | screenshots written by the verifier (gitignored) |
+| `verify-browser.mjs` | real-browser verification over CDP (21 assertions) — console/exception capture, every tab, a real mutation, reload persistence, a blocked-CDN outage, screenshots |
+| `verify-edit.mjs` | edit/delete/robustness verification (37 assertions) — material and recipe editing, the delete-vs-usage rules, the two data-lockout scenarios, range chips, real xlsx/PDF exports |
+| `verified-*.png` | screenshots written by the verifiers (gitignored) |
 
 ## Verify it works
 
-Needs Google Chrome installed. The script serves `public/` over a real `http://` URL, drives the
-app with the DevTools Protocol, and exits non-zero if any assertion fails:
+Both scripts need Google Chrome installed. They serve `public/` over a real `http://` URL, drive
+the app with the DevTools Protocol, and exit non-zero if any assertion fails:
 
 ```bash
-node verify-browser.mjs
+node verify-browser.mjs   # 21 assertions
+node verify-edit.mjs      # 37 assertions
 ```
 
-It writes `verified-*.png` screenshots next to itself and cleans up its temporary Chrome profile.
+They write `verified-*.png` screenshots next to themselves and clean up their temporary Chrome
+profiles. Run both before publishing a regenerated build.
 
-## Note on the POS import (SheetJS)
+## Notes on the import and the exports (SheetJS + jsPDF)
 
-SheetJS (`xlsx.full.min.js`) is loaded from cdnjs at runtime and is used **only to read** the POS
-file you upload — **the app has no export**. The import needs a network connection the first time
-so that library can load; if it is unavailable the app still opens and the import fails visibly
-with `Import problem: ReferenceError: XLSX is not defined`. Everything already stored in
+Three libraries load from cdnjs at runtime: SheetJS (`xlsx.full.min.js`) to read a POS file or a
+bill, and jsPDF + `jspdf-autotable` to write a PDF. All of them need a network connection the first
+time. If one is missing the app still opens and the action needing it says so and stops — `Import
+problem: ReferenceError: XLSX is not defined` on import, or *"Excel tool did not load. Check your
+internet and reload."* / *"PDF tool did not load. …"* on export. Everything already stored in
 `localStorage` keeps working offline.
+
+**Reports and exports** (Today tab): the range chips switch between **Day**, **7 days**, **30 days**
+and a **Custom** range (up to 3 months), and the two export buttons write that report —
+`Nest-FoodCost_<from>_to_<to>_<outlet>.xlsx` and `.pdf`. Inside the Claude environment the file is
+handed to the downloads integration; in a plain browser it is a normal download.
 
 ## Robustness of the stored state
 
 This matters more than it sounds on GitHub Pages: **every `*.github.io` project page shares one
-origin**, so another app that writes the same `nest2` key would otherwise collide with this one.
-On load the parsed state is therefore validated — if `sales`, `rm`, `menu`, `inv` and `waste` are
-not all arrays, the app falls back to the seeded demo data instead of failing to render.
+origin**, so another app that writes the same `nest2` key can collide with this one.
+
+> ⚠ **Open finding — there is no boot-time validation.** `verify-browser.mjs` (`h4`) stores a
+> *valid but partial* state (for example `{}`, or an object without `sales`/`rm`/`menu`) and reports
+> that the app then **hard-crashes on every load**: blank `#app`, no `#nav`, and since Settings is
+> the only in-app reset there is no way back except clearing site data. An earlier version of this
+> README claimed the state was validated and fell back to demo data; that code is not in the app,
+> here or in the previous build. A guard before the first `draw()` would close it, e.g.
+> `if (!S || !['sales','rm','menu','inv','waste'].every(k => Array.isArray(S[k]))) S = demo();`
+> (unparseable JSON is already handled by the `try/catch` around `JSON.parse`).
 
 ### Dangling ingredient references (fixed)
 
@@ -123,7 +139,8 @@ Two changes close it:
 Both are covered by `verify-edit.mjs` (32 assertions), which reproduces the original lockout —
 including the blank-screen-after-reload case — and asserts it no longer occurs.
 
-The same two guards were dropped in a later build of the app and are restored here:
+These guards have now been dropped by **two** regenerated builds (the Buy-tab build and the
+reports/export build) and were restored each time:
 
 - `rmOf()` again returns the `{name:'(missing)'}` placeholder for an unresolved id, so a dangling
   ingredient renders instead of throwing.
@@ -131,5 +148,11 @@ The same two guards were dropped in a later build of the app and are restored he
   in surviving menu and prep recipes, plus stock, wastage and purchase rows pointing at removed
   materials. Without the prune the dangling ids persisted in `localStorage` and survived reload.
 
-`verify-edit.mjs` also follows two deliberate changes in the newer build: the sixth (Buy) tab, and
-the cascade delete policy described above.
+If the app is regenerated upstream again, re-apply those two edits before publishing —
+`verify-edit.mjs` fails loudly (`X2`/`X3`/`X4`, `Y3`/`Y4`) without them.
+
+`verify-edit.mjs` (37 assertions) also follows deliberate changes in the newer builds: the sixth
+(Buy) tab, the cascade delete policy described above, and — for the reports build — the range chips
+and both exports (`Z1`–`Z5`, asserting a real `.xlsx` zip and a real `%PDF` file come out).
+`verify-browser.mjs` (21 assertions) adds `h4`, which blocks the CDN and asserts both exports report
+the missing library instead of writing a broken file.
