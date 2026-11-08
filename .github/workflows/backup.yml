@@ -1,0 +1,85 @@
+name: Nightly database backup + restore test
+
+# Every night: dump the Supabase database, restore that dump into a separate,
+# empty PostgreSQL (a throwaway service container), verify it (row counts,
+# structure, foreign keys, integrity checks, app read-back), then encrypt it
+# with AES-256 and keep it as a workflow artifact for 90 days.
+# A failure at any step fails the run. GitHub emails the person who last edited the
+# `cron:` line below (and anyone who enabled failed-workflow notifications).
+# Scheduled and manual runs only work once this file is on the default branch (main).
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL    Session-pooler connection string (IPv4), see docs/SETUP.md
+#   BACKUP_PASSPHRASE  Long random passphrase. Also store it OFFLINE (password
+#                      manager + paper): without it the backups cannot be opened.
+
+on:
+  schedule:
+    - cron: '30 20 * * *'   # 20:30 UTC = 02:00 IST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container: postgres:17          # provides pg_dump / pg_restore / psql 17
+    services:
+      scratch:                      # separate, empty database server for the restore test
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: scratch
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    # Secrets are given only to the steps that need them (not to the checkout/upload actions).
+    steps:
+      - name: Check secrets are configured
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          [ -n "$DATABASE_URL" ] || { echo "::error::Repository secret SUPABASE_DB_URL is not set"; exit 1; }
+          [ ${#BACKUP_PASSPHRASE} -ge 20 ] || { echo "::error::Repository secret BACKUP_PASSPHRASE is missing or shorter than 20 characters"; exit 1; }
+
+      - name: Install tools
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends gnupg ca-certificates git >/dev/null
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+
+      - name: Dump the production database
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/backup.sh out
+
+      - name: Restore into a separate empty database and verify it
+        env:
+          RESTORE_ADMIN_URL: postgresql://postgres:scratch@scratch:5432/postgres
+        run: bash scripts/verify-restore.sh out
+
+      - name: Encrypt (AES-256) and prove it decrypts
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          STAMP=$(date -u +%Y-%m-%d_%H%M)
+          tar -C out -cf backup.tar db.dump manifest.txt counts_before.tsv counts_after.tsv counts_restored.tsv schema.tsv
+          printf %s "$BACKUP_PASSPHRASE" | gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 -o "eatatnest-db-$STAMP.tar.gpg" backup.tar
+          printf %s "$BACKUP_PASSPHRASE" | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 \
+            -d "eatatnest-db-$STAMP.tar.gpg" | cmp - backup.tar
+          rm -rf out backup.tar           # no unencrypted copy leaves this job
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
+        with:
+          name: eatatnest-db-${{ env.STAMP }}
+          path: eatatnest-db-*.tar.gpg
+          retention-days: 90
+          compression-level: 0
+          if-no-files-found: error

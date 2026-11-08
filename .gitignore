@@ -7,3 +7,13 @@ verified-*.png
 shot-*.png
 live-*.png
 live-*.html
+.localdb/
+tests/node_modules/
+backups/
+*.dump
+*.gpg
+# disaster-recovery: never commit backups (the repository is public)
+backup/
+*.tar
+scripts/node_modules/
+supabase/.temp/

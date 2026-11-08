@@ -1,0 +1,1 @@
+{"name":"eatatnest-tests","private":true,"type":"module","scripts":{"db":"node db.test.mjs","e2e":"node e2e.test.mjs"},"devDependencies":{"@supabase/supabase-js":"^2.119.0","pg":"^8.23.1","puppeteer-core":"^25.16.0"}}
