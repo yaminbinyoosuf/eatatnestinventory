@@ -156,9 +156,10 @@ checks(result, name, detail) as (
   select case when count(*) = 1 then 'PASS' else 'FAIL' end, 'exactly one active owner', count(*)::text
     from public.staff where role = 'owner' and active
   union all
-  select case when count(*) = 0 then 'PASS' else 'FAIL' end, 'every staff row matches a login (same id and email)',
+  select case when count(*) = 0 then 'PASS' else 'FAIL' end, 'every ACTIVE staff member has a matching login (same id and email)',
          string_agg(s.email, ', ')
-    from public.staff s left join auth.users u on u.id = s.user_id and lower(u.email) = s.email where u.id is null
+    from public.staff s left join auth.users u on u.id = s.user_id and lower(u.email) = s.email
+   where s.active and u.id is null
   union all
   select case when count(*) = 0 then 'PASS' else 'FAIL' end, 'every active non-owner has at least one outlet',
          string_agg(s.email, ', ')

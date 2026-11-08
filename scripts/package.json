@@ -1,0 +1,8 @@
+{
+  "name": "eatatnest-recovery",
+  "private": true,
+  "description": "Only dependency of scripts/recreate-logins.mjs (disaster recovery). Install with: cd scripts && npm ci",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "dependencies": { "@supabase/supabase-js": "2.119.0" }
+}

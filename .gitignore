@@ -7,3 +7,11 @@ verified-*.png
 shot-*.png
 live-*.png
 live-*.html
+
+# disaster-recovery: never commit backups (the repository is public)
+backups/
+backup/
+*.dump
+*.gpg
+*.tar
+scripts/node_modules/

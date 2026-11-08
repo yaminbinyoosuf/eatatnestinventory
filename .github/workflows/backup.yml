@@ -37,12 +37,11 @@ jobs:
           POSTGRES_PASSWORD: scratch
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
-    env:
-      DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
-      RESTORE_ADMIN_URL: postgresql://postgres:scratch@scratch:5432/postgres
+    # Secrets are given only to the steps that need them (not to the checkout/upload actions).
     steps:
       - name: Check secrets are configured
         env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           [ -n "$DATABASE_URL" ] || { echo "::error::Repository secret SUPABASE_DB_URL is not set"; exit 1; }
@@ -51,12 +50,16 @@ jobs:
       - name: Install tools
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends gnupg ca-certificates git >/dev/null
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
 
       - name: Dump the production database
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: bash scripts/backup.sh out
 
       - name: Restore into a separate empty database and verify it
+        env:
+          RESTORE_ADMIN_URL: postgresql://postgres:scratch@scratch:5432/postgres
         run: bash scripts/verify-restore.sh out
 
       - name: Encrypt (AES-256) and prove it decrypts
@@ -73,7 +76,7 @@ jobs:
           rm -rf out backup.tar           # no unencrypted copy leaves this job
           echo "STAMP=$STAMP" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
         with:
           name: eatatnest-db-${{ env.STAMP }}
           path: eatatnest-db-*.tar.gpg
