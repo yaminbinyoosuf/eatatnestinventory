@@ -6,6 +6,9 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # Deploy only when the app itself changes; pushes of backup scripts/docs do not redeploy.
+    paths:
+      - 'public/**'
   workflow_dispatch:
 
 permissions:
