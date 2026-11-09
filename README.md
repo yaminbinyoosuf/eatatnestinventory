@@ -1,158 +1,75 @@
 # eat@nest — Inventory & Food Cost
 
-A single-file, offline, mobile-first inventory and food-cost tracker for the Nest Café outlets
-(**Areekode** and **Kondotty**).
+Mobile-first inventory and food-cost app for the Nest Café outlets (**Areekode** and **Kondotty**).
 
-The whole app is `public/index.html` — no build step, no server, no framework. Open it directly,
-or deploy the `public/` folder as a static site. The logo is embedded in the file as a base64 data
-URI, so the app stays genuinely single-file with no image request.
+- **Frontend:** the single file `public/index.html`, hosted on GitHub Pages. No build step.
+- **Data:** one central **Supabase PostgreSQL** database. The browser stores no business
+  data, so records survive clearing the browser, switching phones and using several devices at once.
+- **Backups:** encrypted nightly, each one restored and verified automatically (`docs/RECOVERY.md`).
+
+To connect a new Supabase project, follow **`docs/SETUP.md`**.
 
 ## What it does
 
-Six tabs, bottom navigation, mobile viewport first.
-
-| Tab | What's in it |
+| Tab | |
 |---|---|
-| **Today** | Data checks, "what to look at", and the top cost issues ranked for the day. |
-| **Sales** | Upload POS sales from **Excel (.xlsx) or CSV**, review the imported rows for the day, then confirm the import. POS item names are remembered as aliases, so the same name matches the same menu item on later imports. |
-| **Stock** | Daily closing stock per outlet (Areekode / Kondotty) and wastage entries with quantity and responsible person. A day can be closed (🔒) once it is finalised. |
-| **Buy** | Purchases from a bill, per outlet and date, with a running total. Lines can be typed by hand, or read from a photo/screenshot of the bill when the app is opened from the Claude link. Saving a purchase adds to that material's price history, which feeds the *Now vs Before* column and the price-change analysis on **Today**. |
-| **Items** | Raw materials (price per unit, minimum stock level) and menu items with recipes — ingredient quantities in `g / ml / pc`, costing, and **cost now vs 30 days earlier**. Existing **raw materials** can be renamed, re-priced (or have their unit changed) or **deleted**. Deleting one that is still in use cascades: the app warns you first, then removes it from every menu and prep recipe, stock row, wastage record and purchase line at the same moment, so nothing is ever left pointing at a material that is gone. (Earlier builds refused the delete instead; both policies keep the same invariant — `verify-edit.mjs` asserts the cascade leaves nothing dangling.) Recipes are versioned: *Save as new version* keeps the price history for the comparison. A separate **Sauces & prep items** section lists the raw materials flagged as prep, with their own recipe and cost. |
-| **Settings** | Outlet setup, and demo-data controls (*Clear demo data*, *Reset to demo*). |
+| **Today** | Food cost vs target, variance, top cost issues, price changes; Day / 7 / 30 days / custom range; Excel and PDF reports. |
+| **Sales** | Import POS sales from Excel or CSV. Unknown POS names can be mapped once and are remembered. Re-importing a day replaces it and never double counts. |
+| **Stock** | Daily opening / bought / in / out / closing per outlet, wastage with reason and person, close and reopen a day. |
+| **Buy** | Purchases from a bill (typed, or read from a photo when opened from the Claude link). Updates Bought and price history. |
+| **Items** | Raw materials and price history, sauces/prep items with batch recipes, menu items with versioned recipes. |
+| **Settings** | Food-cost targets, account, download a copy of all data. |
 
-Money is shown in ₹ (Indian formatting). Units are `kg → g`, `l → ml`, and `pc`.
+## How data is kept safe
 
-## Where the data lives
-
-On the device, in `localStorage` under the key **`nest2`**. Nothing is uploaded anywhere: no
-account, no server round-trip, works offline.
-
-That also means **an audit lives in the browser that created it** — opening the app from
-`file://`, from one deployed URL, and from another URL are **three separate stores**. The app
-ships with seeded demo data so it is explorable before you put real numbers in; use **Settings →
-Clear demo data** to start clean.
-
-> Because the store is browser-local and the app has **no export or backup**, clearing site data,
-> switching device, or switching browser loses every entry. Keep each outlet on one URL/device and
-> treat the browser store as the only copy of the numbers.
-
-## Deploy
-
-The repo is static-only, so both hosts below work with **no build command**.
-
-**GitHub Pages** — already the live link for this repo:
-
-```
-https://yaminbinyoosuf.github.io/eatatnestinventory/
-```
-
-Published by the Actions workflow in `.github/workflows/pages.yml`, which uploads `public/`
-verbatim as the Pages artifact on every push to `main` (branch-based Pages can only serve the repo
-root or `/docs`, which is why the app is not published from the `public/` folder directly).
-
-**Cloudflare Workers** (optional alternative) — the repo also ships a `wrangler.jsonc` pointing at
-`./public`, so no build configuration is needed on the Cloudflare side:
-
-| Setting | Value |
+| Risk | What prevents it |
 |---|---|
-| Build command | *leave empty* |
-| Deploy command | `npx wrangler deploy` (the default) |
+| A save fails silently | The app shows **Saving… → Saved ✓** only after the database confirms the write. Any failure shows **Not saved** with the reason, and the typed entries stay on screen. |
+| The connection drops during a save (the database may or may not have saved it) | Every write carries a request ID. Tapping Save again is answered "Already saved" instead of saving twice. This works even after a page reload. |
+| Double tap / two devices enter the same bill | The screen locks while saving. The database rejects a repeated request ID and a repeated supplier invoice number at the same outlet. |
+| Two people edit the same thing | Materials, menu items, settings and each outlet-day's stock carry a version number. A save based on stale data is refused ("changed by someone else, Reload"), never silently overwritten. |
+| Bad data | Every write goes through a database function that validates it inside one transaction. Constraints and foreign keys back it up. A failed save writes nothing. |
+| Deleting history | Rows are never deleted. "Delete" voids a sale, purchase, stock entry, wastage entry, price or recipe, and archives a material or menu item. `DELETE`/`TRUNCATE` are blocked by triggers for everyone, including the service key and the database administrator in normal use. Someone with full database access could still deliberately disable the triggers or drop tables; that is what the backups are for. Transaction rows cannot be edited in place. |
+| Who changed what | Every insert and change to every business table is written to an append-only `audit_log` (owner-readable). |
+| Unauthorised access | Supabase Auth login with no public sign-up. Row Level Security: browsers can only *read*, and only their own outlet's records. Only an owner or manager can change materials, menu, recipes and settings, or set prices for dates more than 7 days back (staff can record today's bill prices). The service key has read-only table rights. No secret is in the repository. |
+| Losing the database | Nightly encrypted `pg_dump`, restored into a separate database and verified every night. Supabase platform backups on top. Runbook with RPO ≤ 24 h, RTO ≤ 2 h. |
 
-Locally you can preview exactly what would be uploaded with:
-
-```bash
-npx wrangler deploy --dry-run
-```
+Offline use: the app does **not** queue entries offline. Without a connection it clearly says
+nothing can be saved and keeps what you typed, so nothing is ever pretended to be saved.
 
 ## Layout
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `public/index.html` | the app — the only file that gets deployed |
-| `public/.nojekyll` | keeps Jekyll away from the folder if it is ever served from a branch root |
-| `.github/workflows/pages.yml` | uploads `public/` to GitHub Pages on every push to `main` |
-| `wrangler.jsonc` | optional Cloudflare Workers static-assets config (`assets.directory = ./public`) |
-| `verify-browser.mjs` | real-browser verification over CDP (21 assertions) — console/exception capture, every tab, a real mutation, reload persistence, a blocked-CDN outage, screenshots |
-| `verify-edit.mjs` | edit/delete/robustness verification (37 assertions) — material and recipe editing, the delete-vs-usage rules, the two data-lockout scenarios, range chips, real xlsx/PDF exports |
-| `verified-*.png` | screenshots written by the verifiers (gitignored) |
+| `public/index.html` | the app |
+| `public/config.js` | Supabase project URL + publishable key (public values) |
+| `public/vendor/` | supabase-js 2.119.0, SheetJS 0.20.3, jsPDF 4.2.1 + autotable 5.0.9, served from this site (no CDN; no known vulnerabilities as of 2026-11-08) |
+| `supabase/migrations/20261108000000_init.sql` | the whole database: tables, constraints, triggers, RLS, write functions |
+| `scripts/backup.sh` · `restore.sh` · `verify-restore.sh` | backup, the restore procedure, restore verification |
+| `scripts/harden-privileges.sql` · `fingerprint.sql` | privileges re-applied after a restore · structure fingerprint compared on restore |
+| `scripts/verify-production.sql` | read-only PASS/FAIL checks to run in the Supabase SQL Editor |
+| `scripts/recreate-logins.mjs` | disaster recovery only: recreates staff logins with their original ids (see `docs/RECOVERY.md` §3) |
+| `.github/workflows/backup.yml` | nightly encrypted backup + restore test |
+| `.github/workflows/pages.yml` | publishes `public/` to GitHub Pages on push to `main` |
+| `tests/` | database and browser test suites (below) |
+| `docs/SETUP.md` · `docs/RECOVERY.md` · `docs/GO-LIVE.md` | setup steps · backup and recovery runbook · production-readiness checklist |
 
-## Verify it works
+## Tests
 
-Both scripts need Google Chrome installed. They serve `public/` over a real `http://` URL, drive
-the app with the DevTools Protocol, and exit non-zero if any assertion fails:
+They run against a local PostgreSQL 17 + PostgREST (the same REST layer Supabase uses) with a
+small local stand-in for Supabase Auth. Needs Homebrew and Google Chrome:
 
 ```bash
-node verify-browser.mjs   # 21 assertions
-node verify-edit.mjs      # 37 assertions
+brew install postgresql@17 postgrest
+cd tests && npm install && cd ..
+tests/local/env.sh up            # local database + REST API
+node tests/db.test.mjs           # 79 checks: permissions, validation, idempotency, concurrency, no-delete
+node tests/e2e.test.mjs          # 71 checks
+node tests/dr-logins.test.mjs    # 27 checks: disaster-recovery login recreation + forced password change: real Chrome, two devices, offline, lost replies, DB down, conflicts, all tabs
+tests/local/env.sh down
 ```
 
-They write `verified-*.png` screenshots next to themselves and clean up their temporary Chrome
-profiles. Run both before publishing a regenerated build.
+Against the real project (read-only, writes nothing): `cd tests && node prod-smoke.mjs` (see `docs/SETUP.md` step 5).
 
-## Notes on the import and the exports (SheetJS + jsPDF)
-
-Three libraries load from cdnjs at runtime: SheetJS (`xlsx.full.min.js`) to read a POS file or a
-bill, and jsPDF + `jspdf-autotable` to write a PDF. All of them need a network connection the first
-time. If one is missing the app still opens and the action needing it says so and stops — `Import
-problem: ReferenceError: XLSX is not defined` on import, or *"Excel tool did not load. Check your
-internet and reload."* / *"PDF tool did not load. …"* on export. Everything already stored in
-`localStorage` keeps working offline.
-
-**Reports and exports** (Today tab): the range chips switch between **Day**, **7 days**, **30 days**
-and a **Custom** range (up to 3 months), and the two export buttons write that report —
-`Nest-FoodCost_<from>_to_<to>_<outlet>.xlsx` and `.pdf`. Inside the Claude environment the file is
-handed to the downloads integration; in a plain browser it is a normal download.
-
-## Robustness of the stored state
-
-This matters more than it sounds on GitHub Pages: **every `*.github.io` project page shares one
-origin**, so another app that writes the same `nest2` key can collide with this one.
-
-> ⚠ **Open finding — there is no boot-time validation.** `verify-browser.mjs` (`h4`) stores a
-> *valid but partial* state (for example `{}`, or an object without `sales`/`rm`/`menu`) and reports
-> that the app then **hard-crashes on every load**: blank `#app`, no `#nav`, and since Settings is
-> the only in-app reset there is no way back except clearing site data. An earlier version of this
-> README claimed the state was validated and fell back to demo data; that code is not in the app,
-> here or in the previous build. A guard before the first `draw()` would close it, e.g.
-> `if (!S || !['sales','rm','menu','inv','waste'].every(k => Array.isArray(S[k]))) S = demo();`
-> (unparseable JSON is already handled by the `try/catch` around `JSON.parse`).
-
-### Dangling ingredient references (fixed)
-
-**Settings → Clear demo data** used to delete the demo raw materials while keeping any non-demo
-menu item whose recipe referenced them. That left a dangling ingredient id, `price()` dereferenced
-the missing material, and the resulting `TypeError` aborted `draw()` — so `#nav` never rendered.
-After a reload the app was a **blank page with no navigation**, and because Settings is the only
-in-app reset, the user's records were unreachable with no way back. The same class of failure could
-blank the default Today tab outright.
-
-Two changes close it:
-
-- **Clear demo data now prunes references** to the records it removes — ingredient rows in surviving
-  menu and prep recipes, plus stock and wastage rows pointing at deleted materials — so it cannot
-  leave a dangling id behind.
-- **A missing material is no longer fatal.** `rmOf()` returns a placeholder (`"(missing)"`, unit
-  `pc`, no prices, no recipe) instead of `undefined`, so any dangling reference renders as a missing
-  ingredient rather than throwing. This is defence in depth: it also covers hand-edited storage and
-  any future import path.
-
-Both are covered by `verify-edit.mjs` (32 assertions), which reproduces the original lockout —
-including the blank-screen-after-reload case — and asserts it no longer occurs.
-
-These guards have now been dropped by **two** regenerated builds (the Buy-tab build and the
-reports/export build) and were restored each time:
-
-- `rmOf()` again returns the `{name:'(missing)'}` placeholder for an unresolved id, so a dangling
-  ingredient renders instead of throwing.
-- **Settings → Clear demo data** again prunes references to the records it deletes — ingredient rows
-  in surviving menu and prep recipes, plus stock, wastage and purchase rows pointing at removed
-  materials. Without the prune the dangling ids persisted in `localStorage` and survived reload.
-
-If the app is regenerated upstream again, re-apply those two edits before publishing —
-`verify-edit.mjs` fails loudly (`X2`/`X3`/`X4`, `Y3`/`Y4`) without them.
-
-`verify-edit.mjs` (37 assertions) also follows deliberate changes in the newer builds: the sixth
-(Buy) tab, the cascade delete policy described above, and — for the reports build — the range chips
-and both exports (`Z1`–`Z5`, asserting a real `.xlsx` zip and a real `%PDF` file come out).
-`verify-browser.mjs` (21 assertions) adds `h4`, which blocks the CDN and asserts both exports report
-the missing library instead of writing a broken file.
+The backup → encrypt → restore → verify cycle can be run locally against the same stack
+(see `docs/RECOVERY.md` §5).

@@ -7,6 +7,9 @@ verified-*.png
 shot-*.png
 live-*.png
 live-*.html
+.localdb/
+tests/node_modules/
+supabase/.temp/
 
 # disaster-recovery: never commit backups (the repository is public)
 backups/
